@@ -12,17 +12,22 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     virtual bool runOnFunction(Function &F) {
+      errs() << F.getName() << '\n';
+      for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
+          arg->setName("argName");
+          errs() << arg->getName() << "\n";
+        }
       for (auto &bb : F) {
         for (auto &instruction : bb) {
           if (CallBase *callInst = dyn_cast<CallBase>(&instruction)) {
             if (Function *calledFunction = callInst->getCalledFunction()) {
               if (calledFunction->getName().startswith(F.getName())) {
-                errs() << "HENRY " << calledFunction->getName() << "!\n";
-                for(auto arg = calledFunction->arg_begin(); arg != calledFunction->arg_end(); ++arg) {
-                  if(auto* ci = dyn_cast<ConstantInt>(arg))
-                    errs() << ci->getValue() << "\n";
-                    errs() << *arg << "\n";
-                  }
+                //errs() << "HENRY " << calledFunction->getName() << "!\n";
+                for(auto arg = callInst->arg_begin(); arg != callInst->arg_end(); ++arg) {
+                  auto* argValue =arg->get();
+                  argValue->setName("henryName");
+                  errs() << argValue->getName() << "\n";
+                }
               }
             }
           }
