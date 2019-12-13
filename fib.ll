@@ -6,50 +6,46 @@ target triple = "x86_64-apple-macosx10.15.0"
 @.str = private unnamed_addr constant [9 x i8] c"Fib7: %i\00", align 1
 
 ; Function Attrs: noinline nounwind ssp uwtable
-define i32 @fibbonacci(i32, i32, i32) #0 {
-  %4 = alloca i32, align 4
-  %5 = alloca i32, align 4
-  %6 = alloca i32, align 4
-  %7 = alloca i32, align 4
-  store i32 %0, i32* %5, align 4
-  store i32 %1, i32* %6, align 4
-  store i32 %2, i32* %7, align 4
-  %8 = load i32, i32* %5, align 4
-  %9 = icmp eq i32 %8, 0
+define i32 @fibbonacci(i32) #0 {
+  %2 = alloca i32, align 4
+  %3 = alloca i32, align 4
+  store i32 %0, i32* %3, align 4
+  %4 = load i32, i32* %3, align 4
+  %5 = icmp eq i32 %4, 0
+  br i1 %5, label %6, label %7
+
+; <label>:6:                                      ; preds = %1
+  store i32 0, i32* %2, align 4
+  br label %19
+
+; <label>:7:                                      ; preds = %1
+  %8 = load i32, i32* %3, align 4
+  %9 = icmp eq i32 %8, 1
   br i1 %9, label %10, label %11
 
-; <label>:10:                                     ; preds = %3
-  store i32 0, i32* %4, align 4
-  br label %23
+; <label>:10:                                     ; preds = %7
+  store i32 1, i32* %2, align 4
+  br label %19
 
-; <label>:11:                                     ; preds = %3
-  %12 = load i32, i32* %5, align 4
-  %13 = icmp eq i32 %12, 1
-  br i1 %13, label %14, label %15
+; <label>:11:                                     ; preds = %7
+  %12 = load i32, i32* %3, align 4
+  %13 = sub nsw i32 %12, 1
+  %14 = call i32 @fibbonacci(i32 %13)
+  %15 = load i32, i32* %3, align 4
+  %16 = sub nsw i32 %15, 2
+  %17 = call i32 @fibbonacci(i32 %16)
+  %18 = add nsw i32 %14, %17
+  store i32 %18, i32* %2, align 4
+  br label %19
 
-; <label>:14:                                     ; preds = %11
-  store i32 1, i32* %4, align 4
-  br label %23
-
-; <label>:15:                                     ; preds = %11
-  %16 = load i32, i32* %5, align 4
-  %17 = sub nsw i32 %16, 1
-  %18 = call i32 @fibbonacci(i32 %17, i32 0, i32 0)
-  %19 = load i32, i32* %5, align 4
-  %20 = sub nsw i32 %19, 2
-  %21 = call i32 @fibbonacci(i32 %20, i32 0, i32 0)
-  %22 = add nsw i32 %18, %21
-  store i32 %22, i32* %4, align 4
-  br label %23
-
-; <label>:23:                                     ; preds = %15, %14, %10
-  %24 = load i32, i32* %4, align 4
-  ret i32 %24
+; <label>:19:                                     ; preds = %11, %10, %6
+  %20 = load i32, i32* %2, align 4
+  ret i32 %20
 }
 
 ; Function Attrs: noinline nounwind ssp uwtable
 define i32 @main() #0 {
-  %1 = call i32 @fibbonacci(i32 7, i32 0, i32 0)
+  %1 = call i32 @fibbonacci(i32 7)
   %2 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str, i32 0, i32 0), i32 %1)
   ret i32 0
 }
