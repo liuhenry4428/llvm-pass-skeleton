@@ -6,6 +6,7 @@
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/IRBuilder.h"
+#include <vector>
 using namespace llvm;
 
 namespace {
@@ -17,6 +18,7 @@ namespace {
       errs() << F.getName() << '\n';
       //Finds pointer operand
       Value * pointerOperand;
+      std::vector<int64_t> constOffsets;
       for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
           arg->setName("funcArg");
           //errs() << arg->getName() << "\n";
@@ -38,9 +40,6 @@ namespace {
               if (calledFunction->getName().startswith(F.getName())) {
                 for(auto recArg = callInst->arg_begin(); recArg != callInst->arg_end(); ++recArg) {
                   auto* recArgValue =recArg->get();
-                  // recArgValue->setName("recursiveCallArgument");
-                  // errs() << recArgValue->getName() << "\n";
-
                   //TODO: assert recArgValue is a subtract instructon
                   for(auto recArgUse = recArgValue->use_begin(); recArgUse != recArgValue->use_end(); ++recArgUse){
                     auto * recArgUseValue = recArgUse->get();
@@ -53,6 +52,14 @@ namespace {
                       auto  loadInstCastOperandName = loadInstCast->getPointerOperand()->getName();
                       errs() << "Load instruction source "<<loadInstCastOperandName<< '\n';
                       assert(loadInstCastOperandName.startswith("pointerOperand"));
+                      auto * constOperand = recArgUseValueInst->getOperand(1);
+                      if(auto * constOperandCasted = dyn_cast<ConstantInt>(constOperand)){
+                        auto intValue = constOperandCasted->getSExtValue();
+                        errs() << "Const Offset Amount: " << intValue << '\n';
+                        assert(intValue>0);
+                        constOffsets.push_back(intValue);
+                      }
+                      else assert(0);
                     }
                     else assert(0);
                     
