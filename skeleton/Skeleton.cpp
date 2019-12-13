@@ -18,10 +18,10 @@ namespace {
             if (Function *calledFunction = callInst->getCalledFunction()) {
               if (calledFunction->getName().startswith(F.getName())) {
                 errs() << "HENRY " << calledFunction->getName() << "!\n";
-                for(auto arg = callInst->arg_begin(); arg != callInst->arg_end(); ++arg) {
+                for(auto arg = calledFunction->arg_begin(); arg != calledFunction->arg_end(); ++arg) {
                   if(auto* ci = dyn_cast<ConstantInt>(arg))
                     errs() << ci->getValue() << "\n";
-                  errs() << *arg << "\n";
+                    errs() << *arg << "\n";
                   }
               }
             }
