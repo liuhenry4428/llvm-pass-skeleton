@@ -1,9 +1,11 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Function.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
 #include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/IRBuilder.h"
 using namespace llvm;
 
 namespace {
@@ -13,20 +15,48 @@ namespace {
 
     virtual bool runOnFunction(Function &F) {
       errs() << F.getName() << '\n';
+      //Finds pointer operand
+      Value * pointerOperand;
       for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
-          arg->setName("argName");
-          errs() << arg->getName() << "\n";
+          arg->setName("funcArg");
+          //errs() << arg->getName() << "\n";
+          assert(arg->getNumUses() == 1);
+          for(auto argUse = arg->use_begin(); argUse != arg->use_end(); ++argUse){
+            auto argUseValue = argUse->getUser();
+            if(auto * inst  = dyn_cast<StoreInst>(argUseValue)){
+              pointerOperand = inst->getPointerOperand();
+              pointerOperand->setName("pointerOperand");
+            }
+          }
         }
+
+      //Finds rec argument and checks if it's constant negative offset from funcArg
       for (auto &bb : F) {
         for (auto &instruction : bb) {
           if (CallBase *callInst = dyn_cast<CallBase>(&instruction)) {
             if (Function *calledFunction = callInst->getCalledFunction()) {
               if (calledFunction->getName().startswith(F.getName())) {
-                //errs() << "HENRY " << calledFunction->getName() << "!\n";
-                for(auto arg = callInst->arg_begin(); arg != callInst->arg_end(); ++arg) {
-                  auto* argValue =arg->get();
-                  argValue->setName("henryName");
-                  errs() << argValue->getName() << "\n";
+                for(auto recArg = callInst->arg_begin(); recArg != callInst->arg_end(); ++recArg) {
+                  auto* recArgValue =recArg->get();
+                  // recArgValue->setName("recursiveCallArgument");
+                  // errs() << recArgValue->getName() << "\n";
+
+                  //TODO: assert recArgValue is a subtract instructon
+                  for(auto recArgUse = recArgValue->use_begin(); recArgUse != recArgValue->use_end(); ++recArgUse){
+                    auto * recArgUseValue = recArgUse->get();
+                    auto * recArgUseValueInst = dyn_cast<Instruction>(recArgUseValue) ;
+                    auto * recArgUseValueInstOperand = recArgUseValueInst->getOperand(0);
+                    recArgUseValueInstOperand ->setName("loadedOriginalArg");
+                    recArgUseValue->setName("recArg");
+
+                    if(auto * loadInstCast = dyn_cast<LoadInst>(recArgUseValueInstOperand)) {
+                      auto  loadInstCastOperandName = loadInstCast->getPointerOperand()->getName();
+                      errs() << "Load instruction source "<<loadInstCastOperandName<< '\n';
+                      assert(loadInstCastOperandName.startswith("pointerOperand"));
+                    }
+                    else assert(0);
+                    
+                  }
                 }
               }
             }
