@@ -17,15 +17,21 @@ namespace {
     static char ID;
     SkeletonPass() : FunctionPass(ID) {}
 
+
+    /*deathBlitz is used to find base case arguments (i.e., arguments to the function that would not result in a recursive call)
+      by doing a depth first search backwards basic block traversal from the phi node of a return to the first branch statement that is
+      based off of a comparison between the argument and a constant. That constant is the base case argument for that particular phi node
+      value. This function should be called per incoming basic block to the phi node where the incoming value is constant.
+      This is a recursive dfs that returns nullptr if the comparison statement is not found, or that statement's ConstantInt if found.
+      This is called deathBlitz because it has an extremely high chance of crashing. Correctness is produced through debugging of these crashes.
+    */
     // Assume all comparisons for the function argument to base case is done only with equality comparison
     ConstantInt * deathBlitz(BasicBlock &bb, BasicBlock * prevbb){
       auto it = bb.rbegin(); //Iterator
 
-      //only need 1 iteration
       if(BranchInst * branch = dyn_cast<BranchInst>(&*it)){ //Suspicious &*it
         if(branch->isUnconditional()){
           //if unconditional, then just go to preds
-
         }
         //If conditional, check that the dest is previous dest, branch has comparison as conditional,
         //conditional is strictly equality, and that that conditional includes funcArg and a constInt
@@ -51,6 +57,7 @@ namespace {
             }
           }
         }
+        // Recurse over all predecessors if not found.
         for(auto pred : predecessors(&bb)){
           void * returnedDeathBlitz = deathBlitz(*pred, &bb);
           if(returnedDeathBlitz != nullptr){
@@ -60,7 +67,7 @@ namespace {
         return nullptr;
       }
       //If last inst not a branch
-      return nullptr;
+      else return nullptr;
     }
 
     virtual bool runOnFunction(Function &F) {
