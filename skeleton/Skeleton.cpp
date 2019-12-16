@@ -23,7 +23,7 @@ namespace {
       based off of a comparison between the argument and a constant. That constant is the base case argument for that particular phi node
       value. This function should be called per incoming basic block to the phi node where the incoming value is constant.
       This is a recursive dfs that returns nullptr if the comparison statement is not found, or that statement's ConstantInt if found.
-      This is called deathBlitz because it has an extremely high chance of crashing. Correctness is produced through debugging of these crashes.
+      This is called deathBlitz because it has an extremely high chance of crashing. Correctness is produced through debugging of said crashes.
     */
     // Assume all comparisons for the function argument to base case is done only with equality comparison
     ConstantInt * deathBlitz(BasicBlock &bb, BasicBlock * prevbb){
@@ -71,7 +71,7 @@ namespace {
     }
 
     virtual bool runOnFunction(Function &F) {
-      if(F.getName().startswith("main")) return false;
+      if(F.getName().startswith("main") || F.arg_size()>1) return false;
       //TODO ensure function only has 1 arg??????????
       errs() <<"CURRENT FUNCTION: " <<F.getName() << '\n';
       //Finds pointer operand
@@ -82,7 +82,6 @@ namespace {
       for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
           arg->setName("funcArg");
       }
-
 
       // for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
       //     arg->setName("funcArg");
@@ -98,45 +97,33 @@ namespace {
       //   }
 
       // //Finds rec argument and checks if it's constant negative offset from funcArg
-      // for (auto &bb : F) {
-      //   for (auto &instruction : bb) {
-      //     if (CallBase *callInst = dyn_cast<CallBase>(&instruction)) {
-      //       if (Function *calledFunction = callInst->getCalledFunction()) {
-      //         if (calledFunction->getName().startswith(F.getName())) {
-      //           for(auto recArg = callInst->arg_begin(); recArg != callInst->arg_end(); ++recArg) {
-      //             auto* recArgValue =recArg->get();
-      //             //TODO: assert recArgValue is a subtract instructon
-      //             for(auto recArgUse = recArgValue->use_begin(); recArgUse != recArgValue->use_end(); ++recArgUse){
-      //               auto * recArgUseValue = recArgUse->get();
-      //               auto * recArgUseValueInst = dyn_cast<Instruction>(recArgUseValue) ;
-      //               auto * recArgUseValueInstOperand = recArgUseValueInst->getOperand(0);
-      //               recArgUseValueInstOperand ->setName("loadedOriginalArg");
-      //               recArgUseValue->setName("recArg");
+      for (auto &bb : F) {
+        for (auto &instruction : bb) {
+          if (CallBase *callInst = dyn_cast<CallBase>(&instruction)) {
+            if (Function *calledFunction = callInst->getCalledFunction()) {
+              if (calledFunction->getName().startswith(F.getName())) {
+                for(auto recArg = callInst->arg_begin(); recArg != callInst->arg_end(); ++recArg) {
+                  auto* recArgValue =recArg->get();
+                  recArgValue->setName("recArgNew");
+                  if(auto * recArgInst = dyn_cast<Instruction>(recArgValue)){
+                    if(auto * constArg = dyn_cast<ConstantInt>(recArgInst->getOperand(1))){
+                      if(recArgInst->getOperand(0)->getName().startswith("funcArg")){
+                        constOffsets.push_back(constArg->getSExtValue());
+                        errs()<<"Found Offset: " <<constArg->getSExtValue() << '\n';
+                      }
+                    }
+                    else return false;
+                  }
+                  else return false;
+                  //TODO: assert recArgValue is a subtract instructon <<<<<<VERY IMPORTANT
+                }
+              }
+            }
+          }
+        }
+      }
 
-      //               if(auto * loadInstCast = dyn_cast<LoadInst>(recArgUseValueInstOperand)) {
-      //                 auto  loadInstCastOperandName = loadInstCast->getPointerOperand()->getName();
-      //                 //errs() << "Load instruction source "<<loadInstCastOperandName<< '\n';
-      //                 assert(loadInstCastOperandName.startswith("pointerOperand"));
-      //                 auto * constOperand = recArgUseValueInst->getOperand(1);
-      //                 if(auto * constOperandCasted = dyn_cast<ConstantInt>(constOperand)){
-      //                   auto intValue = constOperandCasted->getSExtValue();
-      //                   errs() << "Const Offset Amount: " << intValue << '\n';
-      //                   assert(intValue>0);
-      //                   constOffsets.push_back(intValue);
-      //                 }
-      //                 else assert(0);
-      //               }
-      //               else assert(0);
-                    
-      //             }
-      //           }
-      //         }
-      //       }
-      //     }
-      //   }
-      // }
-
-      //Find Return Stmt
+      //Find (the 1) Return Stmt
       ReturnInst * returnStmt = NULL;
       for(auto &bb : F) for (auto &instruction : bb) 
         if(auto * retInst = dyn_cast<ReturnInst>(&instruction)) 
@@ -146,6 +133,8 @@ namespace {
       assert(returnStmt != NULL);
       Value * returnValue = returnStmt->getReturnValue(); 
       assert(returnValue != nullptr);
+
+      //Find base arguments
       std::vector<int> baseCaseArg;
       std::vector<int> baseCaseVal;
       returnValue->setName("returnValue");
@@ -166,7 +155,7 @@ namespace {
             aBaseCaseArg->dump();
           }
           else{
-            errs()<<"XXXXXXXXXX NOT FOUND XXXXXXXXXX\n";
+            errs()<<"XXXXXXXXXX BASE CASE NOT FOUND XXXXXXXXXX\n";
             assert(0);
           }
         }
