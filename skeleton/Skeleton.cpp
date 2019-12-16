@@ -18,22 +18,22 @@ namespace {
     SkeletonPass() : FunctionPass(ID) {}
 
     // Assume all comparisons for the function argument to base case is done only with equality comparison
-    ConstantInt * findBaseCaseVal(BasicBlock &bb, BasicBlock &prevbb){
-      auto it = bb.end(); //Iterator
-        //only need 1 iteration
+    ConstantInt * deathBlitz(BasicBlock &bb, BasicBlock * prevbb){
+      auto it = bb.rbegin(); //Iterator
+
+      //only need 1 iteration
       if(BranchInst * branch = dyn_cast<BranchInst>(&*it)){ //Suspicious &*it
         if(branch->isUnconditional()){
-          for(auto pred : predecessors(&bb)){
-            ConstantInt * dfsResult = findBaseCaseVal(*pred, bb);
-            if(dfsResult != nullptr) return dfsResult;
-          }
-          return nullptr;
+          //if unconditional, then just go to preds
+
         }
+        //If conditional, check that the dest is previous dest, branch has comparison as conditional,
+        //conditional is strictly equality, and that that conditional includes funcArg and a constInt
         else if(branch->isConditional()){
           //Return null if previous BB is not the true destination
           auto trueDest = branch->op_end()->get(); //op_end is the true destination
           if (auto * castedTrueDest = dyn_cast<BasicBlock>(trueDest)){
-            if(!(castedTrueDest == &prevbb)) return nullptr;
+            if(prevbb != nullptr && !(castedTrueDest == &*prevbb)) return nullptr; //suspicious &*prevbb
           }
           if(CmpInst * conditionInst = dyn_cast<CmpInst>(branch->getCondition())){
             if(conditionInst->isEquality()){
@@ -50,22 +50,33 @@ namespace {
               }
             }
           }
-          //Loop over block preds
-          for(auto pred : predecessors(&bb)){
-            ConstantInt * dfsResult = findBaseCaseVal(*pred, bb);
-            if(dfsResult != nullptr) return dfsResult;
-          }
-          return nullptr;
         }
+        for(auto pred : predecessors(&bb)){
+          void * returnedDeathBlitz = deathBlitz(*pred, &bb);
+          if(returnedDeathBlitz != nullptr){
+            if(ConstantInt * result = dyn_cast<ConstantInt>((Value *)returnedDeathBlitz)) return result; else assert(0);
+          } 
+        }
+        return nullptr;
       }
+      //If last inst not a branch
+      return nullptr;
     }
 
     virtual bool runOnFunction(Function &F) {
       if(F.getName().startswith("main")) return false;
-      // errs() << F.getName() << '\n';
+      //TODO ensure function only has 1 arg??????????
+      errs() <<"CURRENT FUNCTION: " <<F.getName() << '\n';
       //Finds pointer operand
       Value * pointerOperand;
       std::vector<int64_t> constOffsets;
+
+      //Really only need 1 iteration
+      for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
+          arg->setName("funcArg");
+      }
+
+
       // for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
       //     arg->setName("funcArg");
       //     //errs() << arg->getName() << "\n";
@@ -123,21 +134,34 @@ namespace {
       for(auto &bb : F) for (auto &instruction : bb) 
         if(auto * retInst = dyn_cast<ReturnInst>(&instruction)) 
         {
-          errs()<<"FOUND RET!\n";
           if (returnStmt == NULL) returnStmt = retInst; else assert(false);
         }
       assert(returnStmt != NULL);
-      Value * returnValue = returnStmt->getReturnValue(); assert(returnValue != NULL);
+      Value * returnValue = returnStmt->getReturnValue(); 
+      assert(returnValue != nullptr);
       std::vector<int> baseCaseArg;
       std::vector<int> baseCaseVal;
       returnValue->setName("returnValue");
       if(auto * returnPhi = dyn_cast<PHINode>(returnValue)){
         for(int i =0; i<returnPhi->getNumIncomingValues(); i++){
-          errs()<<"@@@@@@@@@@@@@";
           auto * inBlock = returnPhi->getIncomingBlock(i);
           auto * inValue = returnPhi->getIncomingValue(i);
           if(!isa<ConstantInt>(inValue)) continue;
-
+          errs()<<"BASE CASE ARGUMENT: ";
+          inValue->dump();
+          void * deathBlitzReturn = deathBlitz(*inBlock, nullptr);
+          if(deathBlitzReturn != nullptr){
+            //errs()<<"!!!!!!!!! FOUND !!!!!!!!!!!!!!!\n";
+            ConstantInt * aBaseCaseArg = dyn_cast<ConstantInt>((Value *)deathBlitzReturn);
+            baseCaseArg.push_back(dyn_cast<ConstantInt>(inValue)->getSExtValue());
+            baseCaseVal.push_back(aBaseCaseArg->getSExtValue());
+            errs()<<"BASE CASE VALUE: ";
+            aBaseCaseArg->dump();
+          }
+          else{
+            errs()<<"XXXXXXXXXX NOT FOUND XXXXXXXXXX\n";
+            assert(0);
+          }
         }
       }
       else{
