@@ -86,26 +86,21 @@ namespace {
           arg->setName("funcArg");
       }
 
-
-      // //Finds rec argument and checks if it's constant negative offset from funcArg
+      //Finds rec argument and checks if it's constant negative offset from funcArg
       for (auto &bb : F) {
         std::vector<Value *> recCallReturns;
         std::vector<Value *> dependents;
         for (auto &instruction : bb) {
           //If inst is dependent on recursive call return
           if(Instruction * someInst = dyn_cast<Instruction>(&instruction)){
-            // errs()<< "CURRENT INST::::::::::::::::::::::::::::::::::::::::::::"; someInst->dump(); errs()<<'\n';
-            bool exitFlag = false;
+            bool exitFlag = false;//prevents double counting
             for(auto useIt = someInst->op_begin(); useIt != someInst->op_end(); ++useIt){
-              // auto * currentUse = useIt->get();
               auto * currentUse = useIt->get();
-              // currentUse->dump();
-              // for(Value * i : recCallReturns) i->dump();
               //If dependent on rec call
               for(auto dep : dependents){
                 if(dep == currentUse){
                   dependents.push_back(someInst);
-                  exitFlag = true;
+                  exitFlag = true; 
                   break;
                 }
               }
