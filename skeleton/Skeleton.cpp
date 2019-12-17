@@ -10,6 +10,7 @@
 #include "llvm/IR/CFG.h"
 #include "llvm/Analysis/CFG.h"
 #include <vector>
+#include <algorithm>
 using namespace llvm;
 
 namespace {
@@ -70,6 +71,8 @@ namespace {
       else return nullptr;
     }
 
+
+
     virtual bool runOnFunction(Function &F) {
       if(F.getName().startswith("main") || F.arg_size()>1) return false;
       //TODO ensure function only has 1 arg??????????
@@ -83,28 +86,50 @@ namespace {
           arg->setName("funcArg");
       }
 
-      // for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
-      //     arg->setName("funcArg");
-      //     //errs() << arg->getName() << "\n";
-      //     assert(arg->getNumUses() == 1);
-      //     for(auto argUse = arg->use_begin(); argUse != arg->use_end(); ++argUse){
-      //       auto argUseValue = argUse->getUser();
-      //       if(auto * inst  = dyn_cast<StoreInst>(argUseValue)){
-      //         pointerOperand = inst->getPointerOperand();
-      //         pointerOperand->setName("pointerOperand");
-      //       }
-      //     }
-      //   }
 
       // //Finds rec argument and checks if it's constant negative offset from funcArg
       for (auto &bb : F) {
+        std::vector<Value *> recCallReturns;
+        std::vector<Value *> dependents;
         for (auto &instruction : bb) {
+          //If inst is dependent on recursive call return
+          if(Instruction * someInst = dyn_cast<Instruction>(&instruction)){
+            // errs()<< "CURRENT INST::::::::::::::::::::::::::::::::::::::::::::"; someInst->dump(); errs()<<'\n';
+            bool exitFlag = false;
+            for(auto useIt = someInst->op_begin(); useIt != someInst->op_end(); ++useIt){
+              // auto * currentUse = useIt->get();
+              auto * currentUse = useIt->get();
+              // currentUse->dump();
+              // for(Value * i : recCallReturns) i->dump();
+              //If dependent on rec call
+              for(auto dep : dependents){
+                if(dep == currentUse){
+                  dependents.push_back(someInst);
+                  exitFlag = true;
+                  break;
+                }
+              }
+              if(exitFlag)break;
+              //If dependent on something dependent on a rec call
+              for(auto rcr : recCallReturns){
+                if(rcr == currentUse){
+                  dependents.push_back(someInst);
+                  exitFlag = true;
+                  break;
+                }
+              }
+            }
+            if(exitFlag) continue;
+          }
+
           if (CallBase *callInst = dyn_cast<CallBase>(&instruction)) {
             if (Function *calledFunction = callInst->getCalledFunction()) {
               if (calledFunction->getName().startswith(F.getName())) {
-                for(auto recArg = callInst->arg_begin(); recArg != callInst->arg_end(); ++recArg) {
+                callInst->setName("recCallReturn");
+                recCallReturns.push_back(callInst);
+                for(auto recArg = callInst->arg_begin(); recArg != callInst->arg_end(); ++recArg) { //should only need 1 iteration
                   auto* recArgValue =recArg->get();
-                  recArgValue->setName("recArgNew");
+                  recArgValue->setName("recArg");
                   if(auto * recArgInst = dyn_cast<Instruction>(recArgValue)){
                     if(auto * constArg = dyn_cast<ConstantInt>(recArgInst->getOperand(1))){
                       if(recArgInst->getOperand(0)->getName().startswith("funcArg")){
@@ -115,10 +140,25 @@ namespace {
                     else return false;
                   }
                   else return false;
+
+                  
+
                   //TODO: assert recArgValue is a subtract instructon <<<<<<VERY IMPORTANT
                 }
               }
             }
+          }
+        }
+        if(recCallReturns.size() != 0){
+          errs()<< "RECURSIVE CALL RETURNS: \n";
+          for(Value * i : recCallReturns){
+            i->dump();
+          }
+        }
+        if(dependents.size() != 0){
+          errs()<< "DEPENDENTS: \n";
+          for(Value * i : dependents){
+            i->dump();
           }
         }
       }
@@ -142,7 +182,11 @@ namespace {
         for(int i =0; i<returnPhi->getNumIncomingValues(); i++){
           auto * inBlock = returnPhi->getIncomingBlock(i);
           auto * inValue = returnPhi->getIncomingValue(i);
-          if(!isa<ConstantInt>(inValue)) continue;
+
+          //Found the recursive return value (ie non-base-case)
+          if(!isa<ConstantInt>(inValue)) {
+            continue;
+          }
           errs()<<"BASE CASE ARGUMENT: ";
           inValue->dump();
           void * deathBlitzReturn = deathBlitz(*inBlock, nullptr);
