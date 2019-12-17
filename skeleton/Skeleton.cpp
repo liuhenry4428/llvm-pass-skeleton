@@ -87,9 +87,10 @@ namespace {
       }
 
       //Finds rec argument and checks if it's constant negative offset from funcArg
+      //TODO fix scope
+      std::vector<Value *> recCallReturns;
+      std::vector<Value *> dependents;
       for (auto &bb : F) {
-        std::vector<Value *> recCallReturns;
-        std::vector<Value *> dependents;
         for (auto &instruction : bb) {
           //If inst is dependent on recursive call return
           if(Instruction * someInst = dyn_cast<Instruction>(&instruction)){
@@ -207,7 +208,72 @@ namespace {
   };
 }
 
+void buildMemoized(std::vector<int> baseCaseArg, 
+  std::vector<int> baseCaseVal, 
+  std::vector<int64_t> constOffsets,
+  std::vector<Value *> recCallReturns,
+  std::vector<Value *> dependents){
+    
+  }
+
+
 char SkeletonPass::ID = 0;
 
 // Register the pass so `opt -skeleton` runs it.
 static RegisterPass<SkeletonPass> X("skeleton", "a useless pass");
+
+// extern crate llvm_sys as llvm;
+// mod util;
+
+// use llvm::core::*;
+// use std::env;
+// // floating point 
+// // no optimization
+// // riscv simulator
+// // rtl simulation
+// // -OO
+
+// fn main() {
+//     let args: Vec<String> = env::args().collect();
+//     let num = (&args[1]).parse::<i32>().unwrap();
+
+//     unsafe {
+//         // Set up a context, module and builder in that context.
+//         let context = LLVMContextCreate();
+//         let module = LLVMModuleCreateWithNameInContext(b"run\0".as_ptr() as *const _, context);
+//         let builder = LLVMCreateBuilderInContext(context);
+
+//         // get a type for sum function
+//         let i32t = LLVMInt32TypeInContext(context);
+//         let mut argts = [i32t];
+//         let function_type = LLVMFunctionType(i32t, argts.as_mut_ptr(), argts.len() as u32, 0);
+
+//         // add it to our module
+//         let function = LLVMAddFunction(module, b"run\0".as_ptr() as *const _, function_type);
+
+//         // Create a basic block in the function and set our builder to generate
+//         // code in it.
+//         let bb = LLVMAppendBasicBlockInContext(context, function, b"entry\0".as_ptr() as *const _);
+
+//         LLVMPositionBuilderAtEnd(builder, bb);
+
+//         // get the function's arguments
+//         let x = LLVMGetParam(function, 0);
+//         let one = LLVMConstInt( i32t, 1, 0);
+//         let mut prod = LLVMBuildMul(builder, one, x, b"prod.1\0".as_ptr() as *const _);
+
+//         for _i in 1..num {
+//             prod = LLVMBuildMul(builder, prod, prod, b"prod.1\0".as_ptr() as *const _);
+//         }
+
+//         // Emit a `ret void` into the function
+//         LLVMBuildRet(builder, prod);
+
+//         // done building
+//         LLVMDisposeBuilder(builder);
+
+//         // Print the module as IR to many_mul.ll. Parameterize name from iterations
+//         // and type of source operands.
+//         util::print_module("many_mul", num, "i32", module);
+//     }
+// }
