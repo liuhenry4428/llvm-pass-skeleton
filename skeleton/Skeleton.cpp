@@ -21,7 +21,7 @@
 
 using namespace llvm;
 
-void buildMemoized(
+Function * buildMemoized(
   std::vector<int> baseCaseArg, 
   std::vector<int> baseCaseVal, 
   std::vector<int64_t> constOffsets,
@@ -220,15 +220,20 @@ namespace {
         assert(false);
       }
 
-      buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F);
+      Function * memoized = buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F);
+      errs()<<"Original Type: ";
+      F.getType()->dump();
+      errs()<<"New Type: ";
+      memoized->getType()->dump();
+      F.replaceAllUsesWith(memoized);
 
-      return false;
+      return true;
     }
 
   };
 }
 
-void buildMemoized(
+Function * buildMemoized(
   std::vector<int> baseCaseArg, 
   std::vector<int> baseCaseVal, 
   std::vector<int64_t> constOffsets,
@@ -239,9 +244,16 @@ void buildMemoized(
   LLVMContext context;
   // auto module = llvm::LLVMModule
   Module * module = new Module("ourModule", context);
-  auto * func = Function::Create(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), "MyFunc", module);
+  errs()<<"passed F type: ";
+  theWholeFunction->getFunctionType()->dump();
+  auto * func = Function::Create(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), "MyFunc");
+  errs()<<"Creation F: ";
+  func->dump();
   // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
   // auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
+  // func->setF
+
+  errs()<<"After Dump";
 
   Argument * funcArg = func->arg_begin();
 
@@ -305,27 +317,21 @@ void buildMemoized(
   builder.CreateStore(current, i2Ptr);
 
   auto loopGuard = builder.CreateICmpSLT(itLoaded, funcArg, "loopGuard");
-  // auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
-  // builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
+  auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
+  builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
 
-  // builder.SetInsertPoint(returnBlock);
-  // builder.CreateRet(current);
+  builder.SetInsertPoint(returnBlock);
+  builder.CreateRet(current);
   
-
+  return func;
 
   
-
-  // builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(1)), ConstantInt::get(theStupidType, 0), "current");
-  // builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(1)), ConstantInt::get(theStupidType, 0), "i1");
-  // builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(1)), ConstantInt::get(theStupidType, 0), "i2");
-
-
 
 
   errs()<<"-------------------------------------------------\n";
   module->dump();
   errs()<<"-------------------------------------------------\n";
-  }
+}
 
 
 char SkeletonPass::ID = 0;
