@@ -96,7 +96,6 @@ namespace {
       //Finds pointer operand
       Value * pointerOperand;
       std::vector<int64_t> constOffsets;
-      IntegerType * passedi32Type;
 
       //Really only need 1 iteration
       for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
@@ -145,7 +144,6 @@ namespace {
                   recArgValue->setName("recArg");
                   if(auto * recArgInst = dyn_cast<Instruction>(recArgValue)){
                     if(auto * constArg = dyn_cast<ConstantInt>(recArgInst->getOperand(1))){
-                      passedi32Type = constArg->getType();
                       if(recArgInst->getOperand(0)->getName().startswith("funcArg")){
                         constOffsets.push_back(constArg->getSExtValue());
                         errs()<<"Found Offset: " <<constArg->getSExtValue() << '\n';
@@ -222,7 +220,7 @@ namespace {
         assert(false);
       }
 
-      buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F, passedi32Type);
+      buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F);
 
       return false;
     }
@@ -236,8 +234,7 @@ void buildMemoized(
   std::vector<int64_t> constOffsets,
   std::vector<Value *> recCallReturns,
   std::vector<Value *> dependents,
-  Function * theWholeFunction,
-  IntegerType * passedi32Type){
+  Function * theWholeFunction){
   // auto context = LLVMContext();
   LLVMContext context;
   // auto module = llvm::LLVMModule
@@ -248,12 +245,79 @@ void buildMemoized(
 
   Argument * funcArg = func->arg_begin();
 
+  //TODO refactor
+
+
+  // First base case
   auto * bb = BasicBlock::Create(context, "BaseCaseStuff", func);
+  auto * trueBlock = BasicBlock::Create(context, "trueBlock", func);
+  auto * falseBlock = BasicBlock::Create(context, "FalseBlock", func);
   IRBuilder<> builder(context);
   builder.SetInsertPoint(bb);
-  // auto temp = getInt32Ty;
-  builder.CreateICmpEQ(ConstantInt(passedi32Type, )), funcArg);
+  //WARNING unsigned constant
+  auto * myCond = builder.CreateICmpEQ(ConstantInt::get(funcArg->getType(), baseCaseArg.at(0)), funcArg);
+  auto * myBranch = builder.CreateCondBr(myCond, trueBlock, falseBlock, (Instruction *)nullptr);
 
+  builder.SetInsertPoint(trueBlock);
+  builder.CreateRet(ConstantInt::get(funcArg->getType(), baseCaseVal.at(0)));
+
+
+  //Second base case
+  auto * trueBlock2 = BasicBlock::Create(context, "trueBlock", func);
+  auto * iterativeBlock = BasicBlock::Create(context, "IterativeBlock", func);
+  builder.SetInsertPoint(falseBlock);
+  //WARNING unsigned constant
+  auto * myCond2 = builder.CreateICmpEQ(ConstantInt::get(funcArg->getType(), baseCaseArg.at(1)), funcArg);
+  auto * myBranch2 = builder.CreateCondBr(myCond2, trueBlock2, iterativeBlock, (Instruction *)nullptr);
+
+  builder.SetInsertPoint(trueBlock2);
+  builder.CreateRet(ConstantInt::get(funcArg->getType(), baseCaseVal.at(1)));
+
+
+  // Iterative case
+  builder.SetInsertPoint(iterativeBlock);
+  auto * theStupidType = funcArg->getType();
+
+  auto itVal = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseArg.at(1)), ConstantInt::get(theStupidType, 0), "iteratorVal");
+  auto i1Val = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(0)), ConstantInt::get(theStupidType, 0), "i1Val");
+  auto i2Val = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(1)), ConstantInt::get(theStupidType, 0), "i2Val");
+
+  auto itPtr = builder.CreateAlloca(theStupidType,nullptr, "itPtr" );
+  auto i1Ptr = builder.CreateAlloca(theStupidType,nullptr, "i1Ptr" );
+  auto i2Ptr = builder.CreateAlloca(theStupidType,nullptr, "i2Ptr" );
+
+  builder.CreateStore(itVal, itPtr);
+  builder.CreateStore(i1Val, i1Ptr);
+  builder.CreateStore(i2Val, i2Ptr);
+
+  auto * WhileBody = BasicBlock::Create(context, "WhileBody", func);
+  builder.CreateBr(WhileBody);
+
+
+  //Do While Body
+  builder.SetInsertPoint(WhileBody);
+  auto itLoaded = builder.CreateLoad(itPtr, "itLoaded");
+  auto i1Loaded = builder.CreateLoad(i1Ptr, "i1Loaded");
+  auto i2Loaded = builder.CreateLoad(i2Ptr, "i2Loaded");
+
+  auto current = builder.CreateAdd(i1Loaded, i2Loaded, "current");
+  builder.CreateStore(i2Loaded, i1Ptr);
+  builder.CreateStore(i2Ptr, current);
+
+  auto loopGuard = builder.CreateICmpSLT(itLoaded, funcArg, "loopGuard");
+  auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
+  builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
+
+  builder.SetInsertPoint(returnBlock);
+  builder.CreateRet(current);
+  
+
+
+  
+
+  // builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(1)), ConstantInt::get(theStupidType, 0), "current");
+  // builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(1)), ConstantInt::get(theStupidType, 0), "i1");
+  // builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(1)), ConstantInt::get(theStupidType, 0), "i2");
 
 
 
