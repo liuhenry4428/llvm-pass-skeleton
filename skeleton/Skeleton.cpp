@@ -16,16 +16,25 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+// #include "llvm/Core.h"
 
 
 using namespace llvm;
+
+void buildMemoized(
+  std::vector<int> baseCaseArg, 
+  std::vector<int> baseCaseVal, 
+  std::vector<int64_t> constOffsets,
+  std::vector<Value *> recCallReturns,
+  std::vector<Value *> dependents,
+  Function * theWholeFunction);
 
 namespace {
   struct SkeletonPass : public FunctionPass {
     static char ID;
     SkeletonPass() : FunctionPass(ID) {}
 
-
+  
     /*deathBlitz is used to find base case arguments (i.e., arguments to the function that would not result in a recursive call)
       by doing a depth first search backwards basic block traversal from the phi node of a return to the first branch statement that is
       based off of a comparison between the argument and a constant. That constant is the base case argument for that particular phi node
@@ -87,6 +96,7 @@ namespace {
       //Finds pointer operand
       Value * pointerOperand;
       std::vector<int64_t> constOffsets;
+      IntegerType * passedi32Type;
 
       //Really only need 1 iteration
       for(auto arg = F.arg_begin(); arg != F.arg_end(); ++arg) {
@@ -135,6 +145,7 @@ namespace {
                   recArgValue->setName("recArg");
                   if(auto * recArgInst = dyn_cast<Instruction>(recArgValue)){
                     if(auto * constArg = dyn_cast<ConstantInt>(recArgInst->getOperand(1))){
+                      passedi32Type = constArg->getType();
                       if(recArgInst->getOperand(0)->getName().startswith("funcArg")){
                         constOffsets.push_back(constArg->getSExtValue());
                         errs()<<"Found Offset: " <<constArg->getSExtValue() << '\n';
@@ -210,29 +221,46 @@ namespace {
       else{
         assert(false);
       }
+
+      buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F, passedi32Type);
+
       return false;
     }
+
   };
 }
 
 void buildMemoized(
-  std::string funcName,
   std::vector<int> baseCaseArg, 
   std::vector<int> baseCaseVal, 
   std::vector<int64_t> constOffsets,
   std::vector<Value *> recCallReturns,
   std::vector<Value *> dependents,
-  Function * theWholeFunction){
-  auto context = LLVMContext();
+  Function * theWholeFunction,
+  IntegerType * passedi32Type){
+  // auto context = LLVMContext();
+  LLVMContext context;
   // auto module = llvm::LLVMModule
-  Module module = llvm::Module("ourModule", context);
-  Module * modulePtr = &module;
-  llvm::IRBuilder<> builder(context);
+  Module * module = new Module("ourModule", context);
+  auto * func = Function::Create(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), "MyFunc", module);
   // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
-  auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
-  // auto bb = BasicBlock(context, "FirstBB", &func);
+  // auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
+
+  Argument * funcArg = func->arg_begin();
+
+  auto * bb = BasicBlock::Create(context, "BaseCaseStuff", func);
+  IRBuilder<> builder(context);
+  builder.SetInsertPoint(bb);
+  // auto temp = getInt32Ty;
+  builder.CreateICmpEQ(ConstantInt(passedi32Type, )), funcArg);
 
 
+
+
+
+  errs()<<"-------------------------------------------------\n";
+  module->dump();
+  errs()<<"-------------------------------------------------\n";
   }
 
 
