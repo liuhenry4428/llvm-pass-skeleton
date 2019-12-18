@@ -16,6 +16,7 @@
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include <iostream> 
 // #include "llvm/Core.h"
 
 
@@ -27,7 +28,8 @@ Function * buildMemoized(
   std::vector<int64_t> constOffsets,
   std::vector<Value *> recCallReturns,
   std::vector<Value *> dependents,
-  Function * theWholeFunction);
+  Function * theWholeFunction,
+  LLVMContext & context);
 
 namespace {
   struct SkeletonPass : public FunctionPass {
@@ -220,18 +222,44 @@ namespace {
         assert(false);
       }
 
-      Function * memoized = buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F);
-      errs()<<"Original Type: ";
-      F.getType()->dump();
-      errs()<<"New Type: ";
-      memoized->getType()->dump();
-      F.replaceAllUsesWith(memoized);
+      LLVMContext context;
+      Function * memoized = buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F, context);
+      assert(memoized != nullptr);
+      IRBuilder<> builder(context);
+      builder.CreateBitCast(memoized, F.getType());
+      // errs()<<"AFTER ASSERT\n\n";
+      // memoized->getType()->dump();
+      // errs()<<"BEFORE DUMP\n\n";
+      // F.getType()->dump();
+      //memoized->dump();
 
+      // errs()<<"AFTER DUMP\n\n";
+      // memoized->getType()->dump();
+      auto undefBadness =UndefValue::get(F.getType());
+      // F.replaceAllUsesWith(undefBadness);
+      // undefBadness->replaceAllUsesWith(memoized);
+      auto * mainFunc = F.getParent()->getFunction("main");
+      // for(auto &mainbb : *mainFunc){
+      //   for(auto maininst : mainbb){
+
+      //   }
+      // }
+      // F.dropAllReferences();
+      // F.eraseFromParent();
+      // errs()<<(F.getFunctionType() == memoized->getFunctionType());
+
+      
       return true;
     }
 
   };
 }
+
+
+
+
+
+
 
 Function * buildMemoized(
   std::vector<int> baseCaseArg, 
@@ -239,20 +267,23 @@ Function * buildMemoized(
   std::vector<int64_t> constOffsets,
   std::vector<Value *> recCallReturns,
   std::vector<Value *> dependents,
-  Function * theWholeFunction){
+  Function * theWholeFunction,
+  LLVMContext & context){
   // auto context = LLVMContext();
-  LLVMContext context;
-  // auto module = llvm::LLVMModule
-  Module * module = new Module("ourModule", context);
-  errs()<<"passed F type: ";
+  // LLVMContext context;
+  // auto context = LLVMContext();
+  Module * theModule = new Module("ourModule", context);
+  // auto * func = Function::Create(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), "MyFunc", theWholeFunction->getParent());
+  // auto * theModule = theWholeFunction->getParent();
+  auto funcCallee = theModule->getOrInsertFunction(theWholeFunction->getName(), theWholeFunction->getFunctionType());
+  errs()<<"FUNCTION CREATION: " << theWholeFunction->getName();
+
   theWholeFunction->getFunctionType()->dump();
-  auto * func = Function::Create(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), "MyFunc", theWholeFunction->getParent());
-  errs()<<"Creation F: ";
-  func->dump();
+  auto * func = theModule->getFunction(theWholeFunction->getName());
+  // auto context = func->getContext();
+  // auto  context = getb
   // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
   // auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
-  // func->setF
-
 
   Argument * funcArg = func->arg_begin();
 
@@ -261,9 +292,13 @@ Function * buildMemoized(
 
   // First base case
   auto * bb = BasicBlock::Create(context, "BaseCaseStuff", func);
+  // auto * bb = 
   auto * trueBlock = BasicBlock::Create(context, "trueBlock", func);
   auto * falseBlock = BasicBlock::Create(context, "FalseBlock", func);
   IRBuilder<> builder(context);
+  builder.CreateBitCast(func, theWholeFunction->getType());
+  errs()<<"HELP@@@@@@@@@@@@@@@@@@@@@@@";
+  func->getType()->dump();
   builder.SetInsertPoint(bb);
   //WARNING unsigned constant
   auto * myCond = builder.CreateICmpEQ(ConstantInt::get(funcArg->getType(), baseCaseArg.at(0)), funcArg);
@@ -314,22 +349,33 @@ Function * buildMemoized(
   auto current = builder.CreateAdd(i1Loaded, i2Loaded, "current");
   builder.CreateStore(i2Loaded, i1Ptr);
   builder.CreateStore(current, i2Ptr);
+  auto increment = builder.CreateAdd(itLoaded,ConstantInt::get(theStupidType, 1), "increment");
+  builder.CreateStore(increment, itPtr);
 
-  auto loopGuard = builder.CreateICmpSLT(itLoaded, funcArg, "loopGuard");
+  auto itLoaded2 = builder.CreateLoad(itPtr, "itLoadedAgain");
+  auto loopGuard = builder.CreateICmpSLT(itLoaded2, funcArg, "loopGuard");
   auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
   builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
 
   builder.SetInsertPoint(returnBlock);
   builder.CreateRet(current);
   
-  return func;
+  // std::filebuf fb;
+  // fb.open ("test.txt",std::ios::out);
+  // std::ostream os(&fb);
+  // os << "Test sentence\n";
+  // fb.close();
 
+  // theModule->print(cout);
   
 
 
   errs()<<"-------------------------------------------------\n";
-  module->dump();
+  func->dump();
   errs()<<"-------------------------------------------------\n";
+  errs()<<"HELP@@@@@@@@@@@@@@@@@@@@@@@";
+  func->getType()->dump();
+  return func;
 }
 
 

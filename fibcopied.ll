@@ -1,4 +1,4 @@
-; ModuleID = 'fib.ll'
+; ModuleID = 'fib.c'
 source_filename = "fib.c"
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-macosx10.15.0"
@@ -6,45 +6,49 @@ target triple = "x86_64-apple-macosx10.15.0"
 @.str = private unnamed_addr constant [9 x i8] c"Fib7: %i\00", align 1
 
 ; Function Attrs: noinline nounwind ssp uwtable
-define i32 @fibbonacci(i32) #0 {
-  %.reg2mem = alloca i32
-  %.0.reg2mem = alloca i32
-  %"reg2mem alloca point" = bitcast i32 0 to i32
-  %2 = icmp eq i32 %0, 0
-  br i1 %2, label %3, label %4
+define i32 @fibbonacci(i32) {
+BaseCaseStuff:
+  %1 = icmp eq i32 0, %0
+  br i1 %1, label %trueBlock, label %FalseBlock
 
-3:                                                ; preds = %1
-  store i32 0, i32* %.0.reg2mem
-  br label %13
+trueBlock:                                        ; preds = %BaseCaseStuff
+  ret i32 0
 
-4:                                                ; preds = %1
-  %5 = icmp eq i32 %0, 1
-  br i1 %5, label %6, label %7
+FalseBlock:                                       ; preds = %BaseCaseStuff
+  %2 = icmp eq i32 1, %0
+  br i1 %2, label %trueBlock1, label %IterativeBlock
 
-6:                                                ; preds = %4
-  store i32 1, i32* %.0.reg2mem
-  br label %13
+trueBlock1:                                       ; preds = %FalseBlock
+  ret i32 1
 
-7:                                                ; preds = %4
-  %8 = sub nsw i32 %0, 1
-  %9 = call i32 @fibbonacci(i32 %8)
-  %10 = sub nsw i32 %0, 2
-  %11 = call i32 @fibbonacci(i32 %10)
-  %12 = add nsw i32 %9, %11
-  store i32 %12, i32* %.reg2mem
-  %.reload = load i32, i32* %.reg2mem
-  store i32 %.reload, i32* %.0.reg2mem
-  br label %13
+IterativeBlock:                                   ; preds = %FalseBlock
+  %itPtr = alloca i32
+  %i1Ptr = alloca i32
+  %i2Ptr = alloca i32
+  store i32 1, i32* %itPtr
+  store i32 0, i32* %i1Ptr
+  store i32 1, i32* %i2Ptr
+  br label %WhileBody
 
-13:                                               ; preds = %7, %6, %3
-  %.0.reload = load i32, i32* %.0.reg2mem
-  ret i32 %.0.reload
+WhileBody:                                        ; preds = %WhileBody, %IterativeBlock
+  %itLoaded = load i32, i32* %itPtr
+  %i1Loaded = load i32, i32* %i1Ptr
+  %i2Loaded = load i32, i32* %i2Ptr
+  %current = add i32 %i1Loaded, %i2Loaded
+  store i32 %i2Loaded, i32* %i1Ptr
+  store i32 %current, i32* %i2Ptr
+  %increment = add i32 %itLoaded, 1
+  store i32 %increment, i32* %itPtr
+  %itLoadedAgain = load i32, i32* %itPtr
+  %loopGuard = icmp slt i32 %itLoadedAgain, %0
+  br i1 %loopGuard, label %WhileBody, label %returnBlock
+
+returnBlock:                                      ; preds = %WhileBody
+  ret i32 %current
 }
-
 ; Function Attrs: noinline nounwind ssp uwtable
 define i32 @main() #0 {
-  %"reg2mem alloca point" = bitcast i32 0 to i32
-  %1 = call i32 @fibbonacci(i32 7)
+  %1 = call i32 @fibbonacci(i32 48)
   %2 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str, i32 0, i32 0), i32 %1)
   ret i32 0
 }

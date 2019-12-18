@@ -45,7 +45,7 @@ define i32 @fibbonacci(i32) #0 {
 
 ; Function Attrs: noinline nounwind ssp uwtable
 define i32 @main() #0 {
-  %1 = call i32 @fibbonacci(i32 7)
+  %1 = call i32 @fibbonacci(i32 48)
   %2 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str, i32 0, i32 0), i32 %1)
   ret i32 0
 }
