@@ -246,14 +246,13 @@ Function * buildMemoized(
   Module * module = new Module("ourModule", context);
   errs()<<"passed F type: ";
   theWholeFunction->getFunctionType()->dump();
-  auto * func = Function::Create(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), "MyFunc");
+  auto * func = Function::Create(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), "MyFunc", theWholeFunction->getParent());
   errs()<<"Creation F: ";
   func->dump();
   // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
   // auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
   // func->setF
 
-  errs()<<"After Dump";
 
   Argument * funcArg = func->arg_begin();
 
