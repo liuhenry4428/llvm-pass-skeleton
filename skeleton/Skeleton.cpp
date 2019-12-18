@@ -180,7 +180,7 @@ namespace {
       for(auto &bb : F) for (auto &instruction : bb) 
         if(auto * retInst = dyn_cast<ReturnInst>(&instruction)) 
         {
-          if (returnStmt == NULL) returnStmt = retInst; else assert(false);
+          if (returnStmt == NULL) returnStmt = retInst; else return false;
         }
       assert(returnStmt != NULL);
       Value * returnValue = returnStmt->getReturnValue(); 
