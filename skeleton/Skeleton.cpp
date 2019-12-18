@@ -294,7 +294,7 @@ void buildMemoized(
   builder.CreateBr(WhileBody);
 
 
-  //Do While Body
+  // //Do While Body
   builder.SetInsertPoint(WhileBody);
   auto itLoaded = builder.CreateLoad(itPtr, "itLoaded");
   auto i1Loaded = builder.CreateLoad(i1Ptr, "i1Loaded");
@@ -302,14 +302,14 @@ void buildMemoized(
 
   auto current = builder.CreateAdd(i1Loaded, i2Loaded, "current");
   builder.CreateStore(i2Loaded, i1Ptr);
-  builder.CreateStore(i2Ptr, current);
+  builder.CreateStore(current, i2Ptr);
 
   auto loopGuard = builder.CreateICmpSLT(itLoaded, funcArg, "loopGuard");
-  auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
-  builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
+  // auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
+  // builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
 
-  builder.SetInsertPoint(returnBlock);
-  builder.CreateRet(current);
+  // builder.SetInsertPoint(returnBlock);
+  // builder.CreateRet(current);
   
 
 
