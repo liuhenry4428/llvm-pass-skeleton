@@ -1,5 +1,5 @@
-; ModuleID = 'memofib.c'
-source_filename = "memofib.c"
+; ModuleID = 'fib.ll'
+source_filename = "fib.c"
 target datalayout = "e-m:o-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-apple-macosx10.15.0"
 
@@ -7,69 +7,44 @@ target triple = "x86_64-apple-macosx10.15.0"
 
 ; Function Attrs: noinline nounwind ssp uwtable
 define i32 @fibbonacci(i32) #0 {
-  %2 = alloca i32, align 4
-  %3 = alloca i32, align 4
-  %4 = alloca i32, align 4
-  %5 = alloca i32, align 4
-  %6 = alloca i32, align 4
-  %7 = alloca i32, align 4
-  store i32 %0, i32* %3, align 4
-  %8 = load i32, i32* %3, align 4
-  %9 = icmp eq i32 %8, 0
-  br i1 %9, label %10, label %11
+  %.reg2mem = alloca i32
+  %.0.reg2mem = alloca i32
+  %"reg2mem alloca point" = bitcast i32 0 to i32
+  %2 = icmp eq i32 %0, 0
+  br i1 %2, label %3, label %4
 
-; <label>:10:                                     ; preds = %1
-  store i32 0, i32* %2, align 4
-  br label %30
+3:                                                ; preds = %1
+  store i32 0, i32* %.0.reg2mem
+  br label %13
 
-; <label>:11:                                     ; preds = %1
-  %12 = load i32, i32* %3, align 4
-  %13 = icmp eq i32 %12, 1
-  br i1 %13, label %14, label %15
+4:                                                ; preds = %1
+  %5 = icmp eq i32 %0, 1
+  br i1 %5, label %6, label %7
 
-; <label>:14:                                     ; preds = %11
-  store i32 1, i32* %2, align 4
-  br label %30
+6:                                                ; preds = %4
+  store i32 1, i32* %.0.reg2mem
+  br label %13
 
-; <label>:15:                                     ; preds = %11
-  store i32 0, i32* %4, align 4
-  store i32 1, i32* %5, align 4
-  store i32 1, i32* %6, align 4
-  br label %16
+7:                                                ; preds = %4
+  %8 = sub nsw i32 %0, 1
+  %9 = call i32 @fibbonacci(i32 %8)
+  %10 = sub nsw i32 %0, 2
+  %11 = call i32 @fibbonacci(i32 %10)
+  %12 = add nsw i32 %9, %11
+  store i32 %12, i32* %.reg2mem
+  %.reload = load i32, i32* %.reg2mem
+  store i32 %.reload, i32* %.0.reg2mem
+  br label %13
 
-; <label>:16:                                     ; preds = %20, %15
-  %17 = load i32, i32* %6, align 4
-  %18 = load i32, i32* %3, align 4
-  %19 = icmp slt i32 %17, %18
-  br i1 %19, label %20, label %28
-
-; <label>:20:                                     ; preds = %16
-  %21 = load i32, i32* %6, align 4
-  %22 = add nsw i32 %21, 1
-  store i32 %22, i32* %6, align 4
-  %23 = load i32, i32* %4, align 4
-  %24 = load i32, i32* %5, align 4
-  %25 = add nsw i32 %23, %24
-  store i32 %25, i32* %7, align 4
-  %26 = load i32, i32* %5, align 4
-  store i32 %26, i32* %4, align 4
-  %27 = load i32, i32* %7, align 4
-  store i32 %27, i32* %5, align 4
-  br label %16
-
-; <label>:28:                                     ; preds = %16
-  %29 = load i32, i32* %5, align 4
-  store i32 %29, i32* %2, align 4
-  br label %30
-
-; <label>:30:                                     ; preds = %28, %14, %10
-  %31 = load i32, i32* %2, align 4
-  ret i32 %31
+13:                                               ; preds = %7, %6, %3
+  %.0.reload = load i32, i32* %.0.reg2mem
+  ret i32 %.0.reload
 }
 
 ; Function Attrs: noinline nounwind ssp uwtable
 define i32 @main() #0 {
-  %1 = call i32 @fibbonacci(i32 3)
+  %"reg2mem alloca point" = bitcast i32 0 to i32
+  %1 = call i32 @fibbonacci(i32 7)
   %2 = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([9 x i8], [9 x i8]* @.str, i32 0, i32 0), i32 %1)
   ret i32 0
 }

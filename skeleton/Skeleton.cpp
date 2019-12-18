@@ -11,6 +11,13 @@
 #include "llvm/Analysis/CFG.h"
 #include <vector>
 #include <algorithm>
+
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Function.h"
+#include "llvm/Transforms/Utils/Cloning.h"
+
+
 using namespace llvm;
 
 namespace {
@@ -208,12 +215,24 @@ namespace {
   };
 }
 
-void buildMemoized(std::vector<int> baseCaseArg, 
+void buildMemoized(
+  std::string funcName,
+  std::vector<int> baseCaseArg, 
   std::vector<int> baseCaseVal, 
   std::vector<int64_t> constOffsets,
   std::vector<Value *> recCallReturns,
-  std::vector<Value *> dependents){
-    
+  std::vector<Value *> dependents,
+  Function * theWholeFunction){
+  auto context = LLVMContext();
+  // auto module = llvm::LLVMModule
+  Module module = llvm::Module("ourModule", context);
+  Module * modulePtr = &module;
+  llvm::IRBuilder<> builder(context);
+  // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
+  auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
+  // auto bb = BasicBlock(context, "FirstBB", &func);
+
+
   }
 
 

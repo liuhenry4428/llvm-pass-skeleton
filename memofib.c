@@ -7,12 +7,12 @@ int fibbonacci(int n) {
    int i2 = 1;
    int i = 1;
    while(i < n){
-      i+=1;
+      i++;
       int current = i1+i2;
-      if(i == n) return current;
       i1 = i2;
       i2 = current;
    }
+   return i2;
 }
 
 int main(){
