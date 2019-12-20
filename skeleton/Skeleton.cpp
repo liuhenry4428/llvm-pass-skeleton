@@ -222,11 +222,52 @@ namespace {
         assert(false);
       }
 
-      LLVMContext context;
-      Function * memoized = buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F, context);
-      assert(memoized != nullptr);
-      IRBuilder<> builder(context);
-      builder.CreateBitCast(memoized, F.getType());
+      errs()<<"BEGIN ERASE!!! \n <><><><><><><><><><><><>\n";
+
+      F.dropAllReferences();
+      F.deleteBody();
+
+      // for (auto &bb : F) {
+      //   errs()<<"BLOK";
+      //   // bb.eraseFromParent();
+      //   for (auto &instruction : bb) {
+      //     errs()<<"INST";
+      //     auto undefBadness = UndefValue::get(instruction.getType());
+      //     instruction.replaceAllUsesWith(undefBadness);
+      //     instruction.eraseFromParent();
+      //   }
+      // }
+      // LLVMContext context;
+      // auto context = F.getContext();
+      // auto * tempbb = BasicBlock::Create(context, "trueBlock", &F);
+      // auto tempasdf = F.getType()->getContext();
+      // ValueToValueMapTy vmap;
+      // errs() <<"BEFORE CLONE";
+      // auto clonedBlock = CloneBasicBlock(&(F.getEntryBlock()), vmap, "TEST SUFFIX", &F);
+      // for(auto inst = clonedBlock->rbegin(); inst != clonedBlock->rend(); ++inst){
+      //   errs()<<"--inst it:\n";
+      //   inst->dump();
+      //   inst->eraseFromParent();
+      // }
+
+      // const BasicBlock *BB = &(F.getEntryBlock());
+      // BasicBlock *NewBB = BasicBlock::Create(F.getContext(), "", &F);
+      // IRBuilder<> builder(F.getContext());
+      // clonedBlock->getInstList().clear();
+      // builder.SetInsertPoint(NewBB);
+      // builder.CreateRet(ConstantInt::get(F.arg_begin()->getType(), baseCaseVal.at(1)));
+      // errs() <<"AFTER CLONE";
+      // BasicBlock::insertInto(&F);
+      // builder.SetInsertPoint(tempbb);
+      // auto tempfuncarg = F.arg_begin();
+      // auto * myCond = builder.CreateRet(ConstantInt::get(tempfuncarg->getType(), baseCaseArg.at(0)));
+
+      Function * memoized = buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F, F.getContext());
+      // assert(memoized != nullptr);
+      // IRBuilder<> builder(context);
+      // builder.CreateBitCast(memoized, F.getType());
+
+
       // errs()<<"AFTER ASSERT\n\n";
       // memoized->getType()->dump();
       // errs()<<"BEFORE DUMP\n\n";
@@ -235,10 +276,10 @@ namespace {
 
       // errs()<<"AFTER DUMP\n\n";
       // memoized->getType()->dump();
-      auto undefBadness =UndefValue::get(F.getType());
+      // auto undefBadness =UndefValue::get(F.getType());
       // F.replaceAllUsesWith(undefBadness);
       // undefBadness->replaceAllUsesWith(memoized);
-      auto * mainFunc = F.getParent()->getFunction("main");
+      // auto * mainFunc = F.getParent()->getFunction("main");
       // for(auto &mainbb : *mainFunc){
       //   for(auto maininst : mainbb){
 
@@ -276,12 +317,11 @@ Function * buildMemoized(
   // auto * func = Function::Create(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), "MyFunc", theWholeFunction->getParent());
   // auto * theModule = theWholeFunction->getParent();
   auto funcCallee = theModule->getOrInsertFunction(theWholeFunction->getName(), theWholeFunction->getFunctionType());
-  errs()<<"FUNCTION CREATION: " << theWholeFunction->getName();
+  // errs()<<"FUNCTION CREATION: " << theWholeFunction->getName();
 
-  theWholeFunction->getFunctionType()->dump();
-  auto * func = theModule->getFunction(theWholeFunction->getName());
-  // auto context = func->getContext();
-  // auto  context = getb
+  // auto * func = theModule->getFunction(theWholeFunction->getName());
+  auto func = theWholeFunction;
+
   // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
   // auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
 
@@ -292,13 +332,10 @@ Function * buildMemoized(
 
   // First base case
   auto * bb = BasicBlock::Create(context, "BaseCaseStuff", func);
-  // auto * bb = 
   auto * trueBlock = BasicBlock::Create(context, "trueBlock", func);
   auto * falseBlock = BasicBlock::Create(context, "FalseBlock", func);
   IRBuilder<> builder(context);
-  builder.CreateBitCast(func, theWholeFunction->getType());
-  errs()<<"HELP@@@@@@@@@@@@@@@@@@@@@@@";
-  func->getType()->dump();
+  // builder.CreateBitCast(func, theWholeFunction->getType());
   builder.SetInsertPoint(bb);
   //WARNING unsigned constant
   auto * myCond = builder.CreateICmpEQ(ConstantInt::get(funcArg->getType(), baseCaseArg.at(0)), funcArg);
@@ -373,8 +410,6 @@ Function * buildMemoized(
   errs()<<"-------------------------------------------------\n";
   func->dump();
   errs()<<"-------------------------------------------------\n";
-  errs()<<"HELP@@@@@@@@@@@@@@@@@@@@@@@";
-  func->getType()->dump();
   return func;
 }
 
@@ -383,59 +418,3 @@ char SkeletonPass::ID = 0;
 
 // Register the pass so `opt -skeleton` runs it.
 static RegisterPass<SkeletonPass> X("skeleton", "a useless pass");
-
-// extern crate llvm_sys as llvm;
-// mod util;
-
-// use llvm::core::*;
-// use std::env;
-// // floating point 
-// // no optimization
-// // riscv simulator
-// // rtl simulation
-// // -OO
-
-// fn main() {
-//     let args: Vec<String> = env::args().collect();
-//     let num = (&args[1]).parse::<i32>().unwrap();
-
-//     unsafe {
-//         // Set up a context, module and builder in that context.
-//         let context = LLVMContextCreate();
-//         let module = LLVMModuleCreateWithNameInContext(b"run\0".as_ptr() as *const _, context);
-//         let builder = LLVMCreateBuilderInContext(context);
-
-//         // get a type for sum function
-//         let i32t = LLVMInt32TypeInContext(context);
-//         let mut argts = [i32t];
-//         let function_type = LLVMFunctionType(i32t, argts.as_mut_ptr(), argts.len() as u32, 0);
-
-//         // add it to our module
-//         let function = LLVMAddFunction(module, b"run\0".as_ptr() as *const _, function_type);
-
-//         // Create a basic block in the function and set our builder to generate
-//         // code in it.
-//         let bb = LLVMAppendBasicBlockInContext(context, function, b"entry\0".as_ptr() as *const _);
-
-//         LLVMPositionBuilderAtEnd(builder, bb);
-
-//         // get the function's arguments
-//         let x = LLVMGetParam(function, 0);
-//         let one = LLVMConstInt( i32t, 1, 0);
-//         let mut prod = LLVMBuildMul(builder, one, x, b"prod.1\0".as_ptr() as *const _);
-
-//         for _i in 1..num {
-//             prod = LLVMBuildMul(builder, prod, prod, b"prod.1\0".as_ptr() as *const _);
-//         }
-
-//         // Emit a `ret void` into the function
-//         LLVMBuildRet(builder, prod);
-
-//         // done building
-//         LLVMDisposeBuilder(builder);
-
-//         // Print the module as IR to many_mul.ll. Parameterize name from iterations
-//         // and type of source operands.
-//         util::print_module("many_mul", num, "i32", module);
-//     }
-// }
