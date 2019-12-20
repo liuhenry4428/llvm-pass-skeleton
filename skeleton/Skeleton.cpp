@@ -261,7 +261,7 @@ namespace {
       // builder.SetInsertPoint(tempbb);
       // auto tempfuncarg = F.arg_begin();
       // auto * myCond = builder.CreateRet(ConstantInt::get(tempfuncarg->getType(), baseCaseArg.at(0)));
-
+      errs()<<"<<ABOUT TO BEGIN BUILD>>\n";
       Function * memoized = buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F, F.getContext());
       // assert(memoized != nullptr);
       // IRBuilder<> builder(context);
@@ -310,11 +310,13 @@ Function * buildMemoized(
   std::vector<Instruction *> dependents,
   Function * theWholeFunction,
   LLVMContext & context){
+  errs()<<"<<BEGIN BUILD>>\n";
   // Module * theModule = new Module("ourModule", context);
   // auto * theModule = theWholeFunction->getParent();
   // auto funcCallee = theModule->getOrInsertFunction(theWholeFunction->getName(), theWholeFunction->getFunctionType());
   // auto * func = theModule->getFunction(theWholeFunction->getName());
   auto func = theWholeFunction;
+  return func;
 
   // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
   // auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
@@ -324,7 +326,7 @@ Function * buildMemoized(
   //TODO refactor
   
   BasicBlock * nextNewBlock = BasicBlock::Create(context, "BaseCaseStuff", func);
-
+  errs()<<"<<BEGIN BASE CASES>>\n";
   IRBuilder<> builder(context);
   for(int i = 0; i<baseCaseArg.size(); i++){
     builder.SetInsertPoint(nextNewBlock);
@@ -355,7 +357,7 @@ Function * buildMemoized(
   // builder.SetInsertPoint(trueBlock2);
   // builder.CreateRet(ConstantInt::get(funcArg->getType(), baseCaseVal.at(1)));
 
-
+  errs()<<"<<BEGIN HEADER>>\n";
   // Iterative case
   std::vector<AllocaInst *>iPtrs;
   builder.SetInsertPoint(nextNewBlock);
@@ -371,7 +373,7 @@ Function * buildMemoized(
     builder.CreateStore(iVal, iPtr);
   }
 
-
+  errs()<<"<<BEGIN BODY -- LOADING>>\n";
   auto * WhileBody = BasicBlock::Create(context, "WhileBody", func);
   builder.CreateBr(WhileBody);
 
@@ -384,6 +386,7 @@ Function * buildMemoized(
     auto iLoaded = builder.CreateLoad(iPtrs.at(i), "iLoaded");
     loadedValues.push_back(iLoaded);
   }
+  errs()<<"<<BEGIN BODY -- DEPENDENTS>>\n";
   Instruction * lastInst;
   for(auto * depInst : dependents){ //TODO make dependents vector<Instruction>
     for(auto depOp = depInst->op_begin(); depOp != depInst->op_end(); ++depOp){
@@ -394,11 +397,14 @@ Function * buildMemoized(
     lastInst = depInst;
   }
 
+  errs()<<"<<BEGIN BODY -- STOREBACKs>>\n";
   // auto current = builder.CreateAdd(i1Loaded, i2Loxaded, "current");
   // auto current = WhileBody->getInstList().rbegin(); //fuck this
   for(int i=0; i<baseCaseArg.size(); i++){
     builder.CreateStore((i == baseCaseArg.size()-1) ? lastInst : loadedValues.at(i+1), iPtrs.at(i));
   }
+
+  errs()<<"<<BEGIN BODY -- GUARD AND SHIT>>\n";
   
   // builder.CreateStore(current, i2Ptr);
   auto increment = builder.CreateAdd(itLoaded,ConstantInt::get(theStupidType, 1), "increment");
@@ -409,6 +415,7 @@ Function * buildMemoized(
   auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
   builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
 
+  errs()<<"<<BEGIN RETURN>>\n";
   builder.SetInsertPoint(returnBlock);
   builder.CreateRet(lastInst);
   
