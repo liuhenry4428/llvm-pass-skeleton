@@ -9,10 +9,10 @@ int henribonacci(int n) {
       return 2;
    } 
    else {
-      return (henribonacci(n-1) + henribonacci(n-2) + henribonacci(n-3));
+      return (henribonacci(n-1) + henribonacci(n-3));
    }
 }
 
 int main(){
-    printf("Fib7: %i", henribonacci(38));
+    printf("Fib7: %i", henribonacci(7));
 }

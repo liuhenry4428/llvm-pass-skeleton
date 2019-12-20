@@ -75,7 +75,8 @@ Function * buildMemoized(
   auto itVal = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseArg.back()), ConstantInt::get(theStupidType, 0), "iteratorVal");
   auto itPtr = builder.CreateAlloca(theStupidType,nullptr, "itPtr" );
   builder.CreateStore(itVal, itPtr);
-  int numMemoValues = recCallReturns.size();
+  // int numMemoValues = recCallReturns.size();
+  int numMemoValues = *(std::max_element(constOffsets.begin(), constOffsets.end()));
   for(int i = 0; i<numMemoValues; i++){
     auto iVal = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(i)), ConstantInt::get(theStupidType, 0), "iVal");
     auto iPtr = builder.CreateAlloca(theStupidType,nullptr, "iPtr" );
@@ -115,8 +116,8 @@ Function * buildMemoized(
   errs()<<"<<BEGIN BODY -- STOREBACKs>>\n";
   // auto current = builder.CreateAdd(i1Loaded, i2Loxaded, "current");
   // auto current = WhileBody->getInstList().rbegin(); //fuck this
-  for(int i=0; i<recCallReturns.size(); i++){
-    builder.CreateStore((i == recCallReturns.size()-1) ? lastInst : loadedValues.at(i+1), iPtrs.at(i));
+  for(int i=0; i<numMemoValues; i++){
+    builder.CreateStore((i == numMemoValues-1) ? lastInst : loadedValues.at(i+1), iPtrs.at(i));
   }
 
   errs()<<"<<BEGIN BODY -- GUARD AND SHIT>>\n";
