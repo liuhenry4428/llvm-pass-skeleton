@@ -11,6 +11,7 @@
 #include "llvm/Analysis/CFG.h"
 #include <vector>
 #include <algorithm>
+#include <unordered_map>
 
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -22,14 +23,123 @@
 
 using namespace llvm;
 
+
 Function * buildMemoized(
   std::vector<int> baseCaseArg, 
   std::vector<int> baseCaseVal, 
   std::vector<int64_t> constOffsets,
-  std::vector<Value *> recCallReturns,
-  std::vector<Value *> dependents,
+  std::vector<Instruction *> recCallReturns,
+  std::vector<Instruction *> dependents,
+  std::vector<Value *> undefCallReturns,
+  std::unordered_map<Use *, int> useToOffset,
   Function * theWholeFunction,
-  LLVMContext & context);
+  LLVMContext & context){
+  errs()<<"<<BEGIN BUILD>>\n";
+  // Module * theModule = new Module("ourModule", context);
+  // auto * theModule = theWholeFunction->getParent();
+  // auto funcCallee = theModule->getOrInsertFunction(theWholeFunction->getName(), theWholeFunction->getFunctionType());
+  // auto * func = theModule->getFunction(theWholeFunction->getName());
+  auto func = theWholeFunction;
+  for(auto thing : dependents){
+    thing->dump();
+  }
+
+  // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
+  // auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
+
+  Argument * funcArg = func->arg_begin();
+
+  //TODO refactor
+  
+  BasicBlock * nextNewBlock = BasicBlock::Create(context, "BaseCaseStuff", func);
+  errs()<<"<<BEGIN BASE CASES>>\n";
+  IRBuilder<> builder(context);
+  for(int i = 0; i<baseCaseArg.size(); i++){
+    builder.SetInsertPoint(nextNewBlock);
+    auto * trueBlock = BasicBlock::Create(context, "TrueBlock", func);
+    auto * falseBlock = BasicBlock::Create(context, "FalseBlock", func);
+    auto * myCond = builder.CreateICmpEQ(ConstantInt::get(funcArg->getType(), baseCaseArg.at(i)), funcArg);
+    auto * myBranch = builder.CreateCondBr(myCond, trueBlock, falseBlock, (Instruction *)nullptr);
+    builder.SetInsertPoint(trueBlock);
+    builder.CreateRet(ConstantInt::get(funcArg->getType(), baseCaseVal.at(i)));
+    nextNewBlock = falseBlock;
+    builder.SetInsertPoint(nextNewBlock);
+  }
+
+  errs()<<"<<BEGIN HEADER>>\n";
+  // Iterative case
+  std::vector<AllocaInst *>iPtrs;
+  builder.SetInsertPoint(nextNewBlock);
+  auto * theStupidType = funcArg->getType();
+
+  auto itVal = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseArg.back()), ConstantInt::get(theStupidType, 0), "iteratorVal");
+  auto itPtr = builder.CreateAlloca(theStupidType,nullptr, "itPtr" );
+  builder.CreateStore(itVal, itPtr);
+  int numMemoValues = recCallReturns.size();
+  for(int i = 0; i<numMemoValues; i++){
+    auto iVal = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(i)), ConstantInt::get(theStupidType, 0), "iVal");
+    auto iPtr = builder.CreateAlloca(theStupidType,nullptr, "iPtr" );
+    iPtrs.push_back(iPtr);
+    builder.CreateStore(iVal, iPtr);
+  }
+
+  errs()<<"<<BEGIN BODY -- LOADING>>\n";
+  auto * WhileBody = BasicBlock::Create(context, "WhileBody", func);
+  builder.CreateBr(WhileBody);
+
+
+  // //Do While Body
+  std::vector<LoadInst *>loadedValues;
+  builder.SetInsertPoint(WhileBody);
+  auto itLoaded = builder.CreateLoad(itPtr, "itLoaded");
+  for(int i = 0; i<numMemoValues; i++){ // TODO SHOULD USE MAX(CONSTNAT OFFSETS) NOT recCallReturns.size() !!!
+    auto iLoaded = builder.CreateLoad(iPtrs.at(i), "iLoaded"+itostr(i));
+    loadedValues.push_back(iLoaded);
+    //undefCallReturns.at(i)->replaceAllUsesWith(iLoaded);
+  }
+  errs()<<"<<BEGIN BODY -- DEPENDENTS>>\n";
+  Instruction * lastInst;
+  for(auto * depInst : dependents){ //TODO make dependents vector<Instruction>
+    for(auto depOp = depInst->op_begin(); depOp != depInst->op_end(); ++depOp){
+      if(useToOffset.count(depOp)){
+        Instruction * newIshit = loadedValues.at(numMemoValues-useToOffset[depOp]);
+        depOp->set(newIshit);
+        depInst->dump();
+      }
+      // int watafuck = std::find(recCallReturns.begin(), recCallReturns.end(), depOp->get()) - recCallReturns.begin();
+    }
+    WhileBody->getInstList().push_back(dyn_cast<Instruction>(depInst));
+    lastInst = depInst;
+  }
+
+  errs()<<"<<BEGIN BODY -- STOREBACKs>>\n";
+  // auto current = builder.CreateAdd(i1Loaded, i2Loxaded, "current");
+  // auto current = WhileBody->getInstList().rbegin(); //fuck this
+  for(int i=0; i<recCallReturns.size(); i++){
+    builder.CreateStore((i == recCallReturns.size()-1) ? lastInst : loadedValues.at(i+1), iPtrs.at(i));
+  }
+
+  errs()<<"<<BEGIN BODY -- GUARD AND SHIT>>\n";
+  
+  // builder.CreateStore(current, i2Ptr);
+  auto increment = builder.CreateAdd(itLoaded,ConstantInt::get(theStupidType, 1), "increment");
+  builder.CreateStore(increment, itPtr);
+
+  //auto itLoaded2 = builder.CreateLoad(itPtr, "itLoadedAgain");
+  auto loopGuard = builder.CreateICmpSLT(increment, funcArg, "loopGuard");
+  auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
+  builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
+
+  errs()<<"<<BEGIN RETURN>>\n";
+  builder.SetInsertPoint(returnBlock);
+  builder.CreateRet(lastInst);
+
+  errs()<<"-------------------------------------------------\n";
+  func->dump();
+  errs()<<"-------------------------------------------------\n";
+  return func;
+}
+
 
 namespace {
   struct SkeletonPass : public FunctionPass {
@@ -106,32 +216,87 @@ namespace {
 
       //Finds rec argument and checks if it's constant negative offset from funcArg
       //TODO fix scope
-      std::vector<Value *> recCallReturns;
-      std::vector<Value *> dependents;
+      std::vector<Instruction *> recCallReturns;
+      std::vector<Instruction *> dependents;
+      std::vector<Value *> undefCallReturns;
+      std::unordered_map<Value *, int> recCallToOffset;
+      std::unordered_map<Use *, int> useToOffset;
+      // std::unordered_map<Value *, Value *> originalDepToClone;
+
       for (auto &bb : F) {
         for (auto &instruction : bb) {
+          // errs()<<"REC CALL TO OFFSET SIZE(): " << recCallToOf fset.size();
           //If inst is dependent on recursive call return
           if(Instruction * someInst = dyn_cast<Instruction>(&instruction)){
+            if((recCallReturns.size() != 0 )&& (recCallReturns.at(0)->getParent() != &bb)) continue; //Bandaid over a bullet hole
             bool exitFlag = false;//prevents double counting
             for(auto useIt = someInst->op_begin(); useIt != someInst->op_end(); ++useIt){
               auto * currentUse = useIt->get();
+              
               //If dependent on rec call
               for(auto dep : dependents){
                 if(dep == currentUse){
-                  dependents.push_back(someInst);
+                  auto clonedInst = someInst->clone();
+                  someInst->replaceAllUsesWith(clonedInst);
+                  for(auto  smallOp = clonedInst->op_begin(); smallOp != clonedInst->op_end(); ++smallOp) {
+                    errs()<<"smallOp->get()\n";
+                    smallOp->get()->dump();
+                    if(recCallToOffset.count(smallOp->get())) {
+                      int offsetVal = recCallToOffset[*smallOp]; 
+                      useToOffset[smallOp] = offsetVal; 
+                      // errs()<<"OFFSET VAL: "<<offsetVal; 
+                      smallOp->set(UndefValue::get(smallOp->get()->getType()));} 
+                  }
+                  clonedInst->setName("clonedName");
+                  dependents.push_back(clonedInst);
+                  // dependents.push_back(someInst);
                   exitFlag = true; 
                   break;
                 }
               }
               if(exitFlag)break;
               //If dependent on something dependent on a rec call
+              // errs()<<"RECCALLRETURNS SIZE():\n"<< recCallReturns.size();
               for(auto rcr : recCallReturns){
                 if(rcr == currentUse){
-                  dependents.push_back(someInst);
+                  errs()<<"DOING INST:\n";
+                  someInst->dump();
+                  auto clonedInst = someInst->clone();
+                  someInst->replaceAllUsesWith(clonedInst);
+                  for(auto  smallOp = clonedInst->op_begin(); smallOp != clonedInst->op_end(); ++smallOp) {
+                    errs()<<"smallOp->get()\n";
+                    smallOp->get()->dump();
+                    if(recCallToOffset.count(smallOp->get())) {
+                      int offsetVal = recCallToOffset[*smallOp]; 
+                      useToOffset[smallOp] = offsetVal; 
+                      // errs()<<"OFFSET VAL: "<<offsetVal; 
+                      smallOp->set(UndefValue::get(smallOp->get()->getType()));} 
+                  }
+                  clonedInst->setName("clonedName");
+                  dependents.push_back(clonedInst);
+                  // dependents.push_back(someInst);
                   exitFlag = true;
                   break;
                 }
               }
+              // if(exitFlag)break;
+              // //If dependent on something dependent on a rec call
+              // for(auto ucr : undefCallReturns){
+              //   if(ucr == currentUse){
+              //     auto clonedInst = someInst->clone();
+              //     someInst->replaceAllUsesWith(clonedInst);
+              //     for(auto  smallOp = clonedInst->op_begin(); smallOp != clonedInst->op_end(); ++smallOp) {
+              //       if(recCallToOffset.count(smallOp->get())) {int offsetVal = recCallToOffset[*smallOp]; useToOffset[smallOp] = offsetVal; errs()<<"OFFSET VAL: "<<offsetVal; smallOp->set(UndefValue::get(smallOp->get()->getType()));} 
+              //       // else if(originalDepToClone.count(smallOp->get())) {smallOp->set(originalDepToClone[smallOp->get()]);}
+              //       // else assert (0);
+              //     }
+              //     clonedInst->setName("clonedName");
+              //     dependents.push_back(clonedInst);
+              //     // dependents.push_back(someInst);
+              //     exitFlag = true;
+              //     break;
+              //   }
+              // }
             }
             if(exitFlag) continue;
           }
@@ -141,6 +306,10 @@ namespace {
               if (calledFunction->getName().startswith(F.getName())) {
                 callInst->setName("recCallReturn");
                 recCallReturns.push_back(callInst);
+                auto newUndef = UndefValue::get(callInst->getType());
+                // auto newUndef = CallInst::Create(callInst->getFunctionType(), &F, "undefCall");
+                // undefCallReturns.push_back(newUndef);
+                //callInst->replaceAllUsesWith(newUndef);
                 for(auto recArg = callInst->arg_begin(); recArg != callInst->arg_end(); ++recArg) { //should only need 1 iteration
                   auto* recArgValue =recArg->get();
                   recArgValue->setName("recArg");
@@ -148,6 +317,7 @@ namespace {
                     if(auto * constArg = dyn_cast<ConstantInt>(recArgInst->getOperand(1))){
                       if(recArgInst->getOperand(0)->getName().startswith("funcArg")){
                         constOffsets.push_back(constArg->getSExtValue());
+                        recCallToOffset[callInst] = constArg->getSExtValue();
                         errs()<<"Found Offset: " <<constArg->getSExtValue() << '\n';
                       }
                     }
@@ -226,69 +396,8 @@ namespace {
 
       F.dropAllReferences();
       F.deleteBody();
-
-      // for (auto &bb : F) {
-      //   errs()<<"BLOK";
-      //   // bb.eraseFromParent();
-      //   for (auto &instruction : bb) {
-      //     errs()<<"INST";
-      //     auto undefBadness = UndefValue::get(instruction.getType());
-      //     instruction.replaceAllUsesWith(undefBadness);
-      //     instruction.eraseFromParent();
-      //   }
-      // }
-      // LLVMContext context;
-      // auto context = F.getContext();
-      // auto * tempbb = BasicBlock::Create(context, "trueBlock", &F);
-      // auto tempasdf = F.getType()->getContext();
-      // ValueToValueMapTy vmap;
-      // errs() <<"BEFORE CLONE";
-      // auto clonedBlock = CloneBasicBlock(&(F.getEntryBlock()), vmap, "TEST SUFFIX", &F);
-      // for(auto inst = clonedBlock->rbegin(); inst != clonedBlock->rend(); ++inst){
-      //   errs()<<"--inst it:\n";
-      //   inst->dump();
-      //   inst->eraseFromParent();
-      // }
-
-      // const BasicBlock *BB = &(F.getEntryBlock());
-      // BasicBlock *NewBB = BasicBlock::Create(F.getContext(), "", &F);
-      // IRBuilder<> builder(F.getContext());
-      // clonedBlock->getInstList().clear();
-      // builder.SetInsertPoint(NewBB);
-      // builder.CreateRet(ConstantInt::get(F.arg_begin()->getType(), baseCaseVal.at(1)));
-      // errs() <<"AFTER CLONE";
-      // BasicBlock::insertInto(&F);
-      // builder.SetInsertPoint(tempbb);
-      // auto tempfuncarg = F.arg_begin();
-      // auto * myCond = builder.CreateRet(ConstantInt::get(tempfuncarg->getType(), baseCaseArg.at(0)));
       errs()<<"<<ABOUT TO BEGIN BUILD>>\n";
-      Function * memoized = buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents, &F, F.getContext());
-      // assert(memoized != nullptr);
-      // IRBuilder<> builder(context);
-      // builder.CreateBitCast(memoized, F.getType());
-
-
-      // errs()<<"AFTER ASSERT\n\n";
-      // memoized->getType()->dump();
-      // errs()<<"BEFORE DUMP\n\n";
-      // F.getType()->dump();
-      //memoized->dump();
-
-      // errs()<<"AFTER DUMP\n\n";
-      // memoized->getType()->dump();
-      // auto undefBadness =UndefValue::get(F.getType());
-      // F.replaceAllUsesWith(undefBadness);
-      // undefBadness->replaceAllUsesWith(memoized);
-      // auto * mainFunc = F.getParent()->getFunction("main");
-      // for(auto &mainbb : *mainFunc){
-      //   for(auto maininst : mainbb){
-
-      //   }
-      // }
-      // F.dropAllReferences();
-      // F.eraseFromParent();
-      // errs()<<(F.getFunctionType() == memoized->getFunctionType());
-
+      Function * memoized = buildMemoized(baseCaseArg, baseCaseVal, constOffsets, recCallReturns, dependents,undefCallReturns, useToOffset,&F, F.getContext());
       
       return true;
     }
@@ -302,138 +411,6 @@ namespace {
 
 
 
-Function * buildMemoized(
-  std::vector<int> baseCaseArg, 
-  std::vector<int> baseCaseVal, 
-  std::vector<int64_t> constOffsets,
-  std::vector<Value *> recCallReturns,
-  std::vector<Instruction *> dependents,
-  Function * theWholeFunction,
-  LLVMContext & context){
-  errs()<<"<<BEGIN BUILD>>\n";
-  // Module * theModule = new Module("ourModule", context);
-  // auto * theModule = theWholeFunction->getParent();
-  // auto funcCallee = theModule->getOrInsertFunction(theWholeFunction->getName(), theWholeFunction->getFunctionType());
-  // auto * func = theModule->getFunction(theWholeFunction->getName());
-  auto func = theWholeFunction;
-  return func;
-
-  // auto func = Function(theWholeFunction->getFunctionType(), theWholeFunction->getLinkage(), theWholeFunction->getAddressSpace(), "myNewFunc", modulePtr);
-  // auto func = module.getOrInsertFunction("myNewFunc", theWholeFunction->getFunctionType());
-
-  Argument * funcArg = func->arg_begin();
-
-  //TODO refactor
-  
-  BasicBlock * nextNewBlock = BasicBlock::Create(context, "BaseCaseStuff", func);
-  errs()<<"<<BEGIN BASE CASES>>\n";
-  IRBuilder<> builder(context);
-  for(int i = 0; i<baseCaseArg.size(); i++){
-    builder.SetInsertPoint(nextNewBlock);
-    auto * trueBlock = BasicBlock::Create(context, "TrueBlock", func);
-    auto * falseBlock = BasicBlock::Create(context, "FalseBlock", func);
-    auto * myCond = builder.CreateICmpEQ(ConstantInt::get(funcArg->getType(), baseCaseArg.at(i)), funcArg);
-    auto * myBranch = builder.CreateCondBr(myCond, trueBlock, falseBlock, (Instruction *)nullptr);
-    builder.SetInsertPoint(trueBlock);
-    builder.CreateRet(ConstantInt::get(funcArg->getType(), baseCaseVal.at(i)));
-    nextNewBlock = falseBlock;
-    builder.SetInsertPoint(nextNewBlock);
-  }
-  // First base case
-  // auto * bb = BasicBlock::Create(context, "BaseCaseStuff", func);
-  // builder.CreateBitCast(func, theWholeFunction->getType());
-  //WARNING unsigned constant
-
-
-
-  //Second base case
-  // auto * trueBlock2 = BasicBlock::Create(context, "trueBlock", func);
-  // auto * iterativeBlock = BasicBlock::Create(context, "IterativeBlock", func);
-  // builder.SetInsertPoint(falseBlock);
-  // //WARNING unsigned constant
-  // auto * myCond2 = builder.CreateICmpEQ(ConstantInt::get(funcArg->getType(), baseCaseArg.at(1)), funcArg);
-  // auto * myBranch2 = builder.CreateCondBr(myCond2, trueBlock2, iterativeBlock, (Instruction *)nullptr);
-
-  // builder.SetInsertPoint(trueBlock2);
-  // builder.CreateRet(ConstantInt::get(funcArg->getType(), baseCaseVal.at(1)));
-
-  errs()<<"<<BEGIN HEADER>>\n";
-  // Iterative case
-  std::vector<AllocaInst *>iPtrs;
-  builder.SetInsertPoint(nextNewBlock);
-  auto * theStupidType = funcArg->getType();
-
-  auto itVal = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseArg.at(1)), ConstantInt::get(theStupidType, 0), "iteratorVal");
-  auto itPtr = builder.CreateAlloca(theStupidType,nullptr, "itPtr" );
-  builder.CreateStore(itVal, itPtr);
-  for(int i = 0; i<baseCaseArg.size(); i++){
-    auto iVal = builder.CreateAdd(ConstantInt::get(theStupidType, baseCaseVal.at(0)), ConstantInt::get(theStupidType, 0), "iVal");
-    auto iPtr = builder.CreateAlloca(theStupidType,nullptr, "iPtr" );
-    iPtrs.push_back(iPtr);
-    builder.CreateStore(iVal, iPtr);
-  }
-
-  errs()<<"<<BEGIN BODY -- LOADING>>\n";
-  auto * WhileBody = BasicBlock::Create(context, "WhileBody", func);
-  builder.CreateBr(WhileBody);
-
-
-  // //Do While Body
-  std::vector<LoadInst *>loadedValues;
-  builder.SetInsertPoint(WhileBody);
-  auto itLoaded = builder.CreateLoad(itPtr, "itLoaded");
-  for(int i = 0; i<baseCaseArg.size(); i++){
-    auto iLoaded = builder.CreateLoad(iPtrs.at(i), "iLoaded");
-    loadedValues.push_back(iLoaded);
-  }
-  errs()<<"<<BEGIN BODY -- DEPENDENTS>>\n";
-  Instruction * lastInst;
-  for(auto * depInst : dependents){ //TODO make dependents vector<Instruction>
-    for(auto depOp = depInst->op_begin(); depOp != depInst->op_end(); ++depOp){
-      int watafuck = std::find(recCallReturns.begin(), recCallReturns.end(), depOp->get()) - recCallReturns.begin();
-      depOp->set(loadedValues.at(watafuck));
-    }
-    WhileBody->getInstList().push_back(dyn_cast<Instruction>(depInst));
-    lastInst = depInst;
-  }
-
-  errs()<<"<<BEGIN BODY -- STOREBACKs>>\n";
-  // auto current = builder.CreateAdd(i1Loaded, i2Loxaded, "current");
-  // auto current = WhileBody->getInstList().rbegin(); //fuck this
-  for(int i=0; i<baseCaseArg.size(); i++){
-    builder.CreateStore((i == baseCaseArg.size()-1) ? lastInst : loadedValues.at(i+1), iPtrs.at(i));
-  }
-
-  errs()<<"<<BEGIN BODY -- GUARD AND SHIT>>\n";
-  
-  // builder.CreateStore(current, i2Ptr);
-  auto increment = builder.CreateAdd(itLoaded,ConstantInt::get(theStupidType, 1), "increment");
-  builder.CreateStore(increment, itPtr);
-
-  //auto itLoaded2 = builder.CreateLoad(itPtr, "itLoadedAgain");
-  auto loopGuard = builder.CreateICmpSLT(increment, funcArg, "loopGuard");
-  auto returnBlock = BasicBlock::Create(context, "returnBlock", func);
-  builder.CreateCondBr(loopGuard, WhileBody, returnBlock);
-
-  errs()<<"<<BEGIN RETURN>>\n";
-  builder.SetInsertPoint(returnBlock);
-  builder.CreateRet(lastInst);
-  
-  // std::filebuf fb;
-  // fb.open ("test.txt",std::ios::out);
-  // std::ostream os(&fb);
-  // os << "Test sentence\n";
-  // fb.close();
-
-  // theModule->print(cout);
-  
-
-
-  errs()<<"-------------------------------------------------\n";
-  func->dump();
-  errs()<<"-------------------------------------------------\n";
-  return func;
-}
 
 
 char SkeletonPass::ID = 0;
