@@ -14,5 +14,5 @@ int henribonacci(int n) {
 }
 
 int main(){
-    printf("Fib7: %i", henribonacci(38));
+    printf("Fib7: %i", henribonacci(40));
 }

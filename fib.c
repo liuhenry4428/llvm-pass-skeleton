@@ -11,5 +11,5 @@ int fibbonacci(int n) {
 }
 
 int main(){
-    printf("Fib7: %i", fibbonacci(7));
+    printf("Fib7: %i", fibbonacci(39));
 }
